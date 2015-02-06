@@ -1,0 +1,15 @@
+{application, smc,
+ [
+  {description, "Simple In Memory Channels"},
+  {vsn, "1"},
+  {modules, [
+             smc
+            ]},
+  {registered, []},
+  {applications, [
+                  kernel,
+                  stdlib,
+                  lager
+                 ]},
+  {env, []}
+ ]}.
