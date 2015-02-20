@@ -112,7 +112,7 @@ handle_info(Msg, State) ->
     lager:warning("Unexpected handle info message: ~p~n", [Msg]),
     {noreply, State}.
 
-terminate(_Reason, _Gblob) ->
+terminate(_Reason, _State) ->
     ok.
 
 code_change(_OldVsn, State, _Extra) ->

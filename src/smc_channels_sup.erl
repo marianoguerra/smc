@@ -22,4 +22,4 @@ init(_) ->
     {ok, {SupFlags, [ChildSpec]}}.
 
 start_child(SupRef, Opts) ->
-    supervisor:start_child(SupRef, Opts).
+    supervisor:start_child(SupRef, [Opts]).
