@@ -5,7 +5,9 @@ all() ->
     [chann_send_receive, chann_send_receive_unsub_send,
      hchann_send_receive, hchann_send_receive_unsub_send,
      chann_stop_send, replay_empty_channel, replay_after_last_channel,
-     replay_after_some_channel].
+     replay_after_some_channel,
+    
+     triq_props].
 
 get_seqnum({SeqNum, _Data}) -> SeqNum.
 
@@ -102,3 +104,6 @@ replay_after_some_channel(Config) ->
     smc:send(Chann, {44, "hi 2"}),
     smc:replay(Chann, self(), 43),
     [{43, "hi 1"}, {44, "hi 2"}] = get_msg().
+
+triq_props(_Config) ->
+    true = triq:check(smc_triq:smc_statem()).

@@ -2,3 +2,4 @@
 logs
 ebin
 deps
+test/*.beam
