@@ -84,10 +84,10 @@ handle_call(stop, _From, State) ->
     {stop, normal, stopped, State}.
 
 handle_cast(Msg, State) ->
-    io:format("Unexpected handle cast message: ~p~n", [Msg]),
+    lager:warning("Unexpected handle cast message: ~p~n", [Msg]),
     {noreply, State}.
 
-handle_info(timeout, State=#state{buffer=Buffer, sub_count=SubCount}) ->
+handle_info(timeout, State=#state{buffer=Buffer, sub_count=SubCount, channel=Channel}) ->
     NewBuffer = smc_cbuf:remove_percentage(Buffer, 0.5),
     NewBufferSize = smc_cbuf:size(NewBuffer),
     NewState = State#state{buffer=NewBuffer},
@@ -95,10 +95,16 @@ handle_info(timeout, State=#state{buffer=Buffer, sub_count=SubCount}) ->
     if
         NewBufferSize == 0 andalso SubCount == 0 ->
             lager:debug("channel buffer empty and no subscribers, stopping channel"),
+            smc_channel:send(Channel, {smc, {closing,
+                                             [{buffer, NewBufferSize},
+                                              {subs, SubCount}]}}),
             {stop, normal, NewState};
         true ->
             lager:debug("reduced channel buffer because of inactivity to ~p items",
                       [NewBufferSize]),
+            smc_channel:send(Channel, {smc, {heartbeat,
+                                             [{buffer, NewBufferSize},
+                                              {subs, SubCount}]}}),
             {noreply, NewState, State#state.check_interval_ms}
     end;
 
@@ -112,7 +118,8 @@ handle_info(Msg, State) ->
     lager:warning("Unexpected handle info message: ~p~n", [Msg]),
     {noreply, State}.
 
-terminate(_Reason, _State) ->
+terminate(Reason, #state{channel=Channel}) ->
+    smc_channel:send(Channel, {smc, {terminate, [{reason, Reason}]}}),
     ok.
 
 code_change(_OldVsn, State, _Extra) ->

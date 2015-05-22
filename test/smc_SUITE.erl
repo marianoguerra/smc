@@ -14,6 +14,7 @@ get_seqnum({SeqNum, _Data}) -> SeqNum.
 get_msg() ->
     receive
         {gen_event_EXIT,{smc_channel,_},normal} -> get_msg();
+        {smc, _} -> get_msg();
         Msg1 -> Msg1
     after
         10 -> none
@@ -38,11 +39,8 @@ init_per_testcase(Test, Config) ->
 chann(Config) -> proplists:get_value(channel, Config).
 hchann(Config) -> proplists:get_value(hchannel, Config).
  
-end_per_testcase(_Test, Config) ->
-    Chann = chann(Config), 
-    HChann = hchann(Config), 
-    ok = smc:stop(Chann),
-    ok = smc:stop(HChann).
+end_per_testcase(_Test, _Config) ->
+    ok.
 
 send_receive(Chann) ->
     smc:subscribe(Chann, self()),

@@ -29,17 +29,18 @@ precondition(_State, _Call) ->
     true.
 
 postcondition(#{subscribed := false}, {call, smc, send, [_Ref, _Num]}, _Result) ->
-    receive
+    Ref = make_ref(),
+    case get_msg(Ref) of
+        Ref -> true;
         _Val -> false
-    after 1 ->
-          true
     end;
 
 postcondition(#{subscribed := true}, {call, smc, send, [_Ref, Num]}, _Result) ->
-    receive
+    Ref = make_ref(),
+    case get_msg(Ref) of
         Num -> true;
-        _Other ->
-            %io:format("got other ~p != ~p~n", [Num, Other]),
+        Other ->
+            ct:pal("got other ~p != ~p~n", [Num, Other]),
             false
     end;
 postcondition(_State, _Call, _Result) ->
@@ -54,3 +55,13 @@ next_state(State, _Var, {call, smc, subscribe, [_Ref, _Pid]}) ->
 next_state(State, _Var, {call, smc, unsubscribe, [_Ref, _Pid]}) ->
     State#{subscribed => false}.
 
+% util
+
+get_msg(Ref) ->
+    receive
+        {gen_event_EXIT,{smc_channel,_},normal} -> get_msg(Ref);
+        {smc, _} -> get_msg(Ref);
+        Msg1 -> Msg1
+    after
+        10 -> Ref
+    end.
