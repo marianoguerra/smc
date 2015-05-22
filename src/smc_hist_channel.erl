@@ -46,20 +46,14 @@ init(Opts) ->
                   name=ChannelName},
     {ok, State, State#state.check_interval_ms}.
 
-handle_call({subscribe, Pid, nil}, _From,
-            State=#state{channel=Channel, sub_count=SubCount}) ->
-    smc_channel:subscribe(Channel, Pid),
-    NewSubCount = SubCount + 1,
-    NewState = State#state{sub_count=NewSubCount},
+handle_call({subscribe, Pid, nil}, _From, State) ->
+    NewState = do_subscribe(State, Pid),
     {reply, ok, NewState, NewState#state.check_interval_ms};
 
 handle_call({subscribe, Pid, FromSeqNum}, _From,
-            State=#state{channel=Channel, buffer=Buffer, sub_count=SubCount,
-                        get_seqnum=GetSeqNum}) ->
+            State=#state{buffer=Buffer, get_seqnum=GetSeqNum}) ->
     do_replay(Pid, FromSeqNum, Buffer, GetSeqNum),
-    smc_channel:subscribe(Channel, Pid),
-    NewSubCount = SubCount + 1,
-    NewState = State#state{sub_count=NewSubCount},
+    NewState = do_subscribe(State, Pid),
     {reply, ok, NewState, NewState#state.check_interval_ms};
 
 handle_call({unsubscribe, Pid}, _From,
@@ -93,7 +87,15 @@ handle_info(timeout, State=#state{buffer=Buffer, sub_count=SubCount, channel=Cha
     NewState = State#state{buffer=NewBuffer},
 
     if
-        NewBufferSize == 0 andalso SubCount == 0 ->
+        NewBufferSize == 0 andalso SubCount =< 0 ->
+            GEHandlers = gen_event:which_handlers(Channel),
+            GEHandlersCount = length(GEHandlers),
+
+            if GEHandlersCount /= SubCount ->
+                   lager:warning("subcount mismatch ~p != ~p",
+                                 [SubCount, GEHandlersCount]);
+               true -> ok
+            end,
             lager:debug("channel buffer empty and no subscribers, stopping channel"),
             smc_channel:send(Channel, {smc, {closing,
                                              [{buffer, NewBufferSize},
@@ -108,10 +110,13 @@ handle_info(timeout, State=#state{buffer=Buffer, sub_count=SubCount, channel=Cha
             {noreply, NewState, State#state.check_interval_ms}
     end;
 
-handle_info({gen_event_EXIT, Handler, Reason}, State=#state{sub_count=SubCount}) ->
+handle_info({gen_event_EXIT, Handler, Reason}, State=#state{channel=Channel}) ->
     lager:debug("handler removed due to exit ~p ~p", [Handler, Reason]),
-    NewSubCount = SubCount - 1,
+    % since we don't know for sure if this process unsubscribed itself we
+    % ask gen_event how many subscribers we have
+    NewSubCount = length(gen_event:which_handlers(Channel)),
     NewState = State#state{sub_count=NewSubCount},
+
     {noreply, NewState};
 
 handle_info(Msg, State) ->
@@ -136,3 +141,9 @@ do_replay(Pid, FromSeqNum, Buffer, GetSeqNum) ->
     ToReplay = lists:reverse(ToReplayReverse),
     Pid ! ToReplay,
     ok.
+
+do_subscribe(State=#state{channel=Channel, sub_count=SubCount}, Pid) ->
+    smc_channel:subscribe(Channel, Pid),
+    NewSubCount = SubCount + 1,
+    State#state{sub_count=NewSubCount}.
+
