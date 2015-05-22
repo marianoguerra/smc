@@ -92,15 +92,20 @@ handle_info(timeout, State=#state{buffer=Buffer, sub_count=SubCount, channel=Cha
             GEHandlersCount = length(GEHandlers),
 
             if GEHandlersCount /= SubCount ->
-                   lager:warning("subcount mismatch ~p != ~p",
-                                 [SubCount, GEHandlersCount]);
-               true -> ok
-            end,
-            lager:debug("channel buffer empty and no subscribers, stopping channel"),
-            smc_channel:send(Channel, {smc, {closing,
-                                             [{buffer, NewBufferSize},
-                                              {subs, SubCount}]}}),
-            {stop, normal, NewState};
+                   lager:warning("subcount mismatch ~p != ~p", [SubCount, GEHandlersCount]),
+                   % since they don't match trust the gen_event handlers count
+                   FixedState = NewState#state{sub_count=GEHandlersCount},
+
+                   {noreply, FixedState, State#state.check_interval_ms};
+               true ->
+                   lager:debug("channel buffer empty and no subscribers, stopping channel"),
+                   smc_channel:send(Channel, {smc, {closing,
+                                                    [{buffer, NewBufferSize},
+                                                     {subs, SubCount}]}}),
+
+                   {stop, normal, NewState}
+            end;
+
         true ->
             lager:debug("reduced channel buffer because of inactivity to ~p items",
                       [NewBufferSize]),
