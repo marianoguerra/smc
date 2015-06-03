@@ -144,7 +144,7 @@ do_replay(Pid, FromSeqNum, Buffer, GetSeqNum) ->
                    end,
     ToReplayReverse = smc_cbuf:takewhile_reverse(Buffer, GtFromSeqNum),
     ToReplay = lists:reverse(ToReplayReverse),
-    Pid ! ToReplay,
+    Pid ! {replay, ToReplay},
     ok.
 
 do_subscribe(State=#state{channel=Channel, sub_count=SubCount}, Pid) ->
