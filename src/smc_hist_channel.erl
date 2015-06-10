@@ -8,7 +8,7 @@
          code_change/3]).
 
 -record(state, {buffer, channel, check_interval_ms=30000, sub_count=0,
-                get_seqnum, name}).
+                max_size_bytes, get_seqnum, name}).
 
 %% API
 
@@ -38,12 +38,13 @@ stop(Channel) ->
 
 init(Opts) ->
     BufferSize = proplists:get_value(buffer_size, Opts, 50),
+    MaxSizeBytes = proplists:get_value(buffer_max_size_bytes, Opts, 1048576),
     ChannelName = proplists:get_value(name, Opts, <<"anon-channel">>),
     {get_seqnum, GetSeqNum} = proplists:lookup(get_seqnum, Opts),
     Buffer = smc_cbuf:new(BufferSize),
     {ok, Channel} = smc_channel:start_link(),
     State = #state{channel=Channel, buffer=Buffer, get_seqnum=GetSeqNum,
-                  name=ChannelName},
+                   max_size_bytes=MaxSizeBytes, name=ChannelName},
     {ok, State, State#state.check_interval_ms}.
 
 handle_call({subscribe, Pid, nil}, _From, State) ->

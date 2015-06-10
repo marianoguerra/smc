@@ -87,13 +87,13 @@ hchann_stop_send(_) ->
 replay_empty_channel(Config) ->
     Chann = hchann(Config), 
     smc:replay(Chann, self(), 43),
-    [] = get_msg().
+    {replay, []} = get_msg().
 
 replay_after_last_channel(Config) ->
     Chann = hchann(Config), 
     smc:send(Chann, {42, "hi"}),
     smc:replay(Chann, self(), 43),
-    [] = get_msg().
+    {replay, []} = get_msg().
 
 replay_after_some_channel(Config) ->
     Chann = hchann(Config), 
@@ -101,7 +101,7 @@ replay_after_some_channel(Config) ->
     smc:send(Chann, {43, "hi 1"}),
     smc:send(Chann, {44, "hi 2"}),
     smc:replay(Chann, self(), 43),
-    [{43, "hi 1"}, {44, "hi 2"}] = get_msg().
+    {replay, [{43, "hi 1"}, {44, "hi 2"}]} = get_msg().
 
 triq_props(_Config) ->
     true = triq:check(smc_triq:smc_statem()).
