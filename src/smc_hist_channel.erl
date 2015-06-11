@@ -2,7 +2,7 @@
 -behaviour(gen_server).
 
 -export([start_link/1, subscribe/2, subscribe/3, unsubscribe/2, send/2,
-         replay/3, stop/1]).
+         replay/3, size_bytes/1, stop/1]).
 
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2,
          code_change/3]).
@@ -17,6 +17,9 @@ start_link(Opts) ->
 
 replay(Channel, Pid, FromSeqNum) ->
     gen_server:call(Channel, {replay, Pid, FromSeqNum}).
+
+size_bytes(Channel) ->
+    gen_server:call(Channel, size_bytes).
 
 subscribe(Channel, Pid) ->
     subscribe(Channel, Pid, nil).
@@ -41,10 +44,9 @@ init(Opts) ->
     MaxSizeBytes = proplists:get_value(buffer_max_size_bytes, Opts, 1048576),
     ChannelName = proplists:get_value(name, Opts, <<"anon-channel">>),
     {get_seqnum, GetSeqNum} = proplists:lookup(get_seqnum, Opts),
-    Buffer = smc_cbuf:new(BufferSize),
+    Buffer = smc_cbuf:new([{min_count, BufferSize}, {max_size_bytes, MaxSizeBytes}]),
     {ok, Channel} = smc_channel:start_link(),
-    State = #state{channel=Channel, buffer=Buffer, get_seqnum=GetSeqNum,
-                   max_size_bytes=MaxSizeBytes, name=ChannelName},
+    State = #state{channel=Channel, buffer=Buffer, get_seqnum=GetSeqNum, name=ChannelName},
     {ok, State, State#state.check_interval_ms}.
 
 handle_call({subscribe, Pid, nil}, _From, State) ->
@@ -75,6 +77,10 @@ handle_call({replay, Pid, FromSeqNum}, _From,
     do_replay(Pid, FromSeqNum, Buffer, GetSeqNum),
     {reply, ok, State, State#state.check_interval_ms};
 
+handle_call(size_bytes, _From, State=#state{buffer=Buffer}) ->
+    SizeBytes = smc_cbuf:size_bytes(Buffer),
+    {reply, SizeBytes, State, State#state.check_interval_ms};
+
 handle_call(stop, _From, State) ->
     {stop, normal, stopped, State}.
 
@@ -82,38 +88,16 @@ handle_cast(Msg, State) ->
     lager:warning("Unexpected handle cast message: ~p~n", [Msg]),
     {noreply, State}.
 
-handle_info(timeout, State=#state{buffer=Buffer, sub_count=SubCount, channel=Channel}) ->
+handle_info(timeout, State=#state{buffer=Buffer, sub_count=SubCount}) ->
     NewBuffer = smc_cbuf:remove_percentage(Buffer, 0.5),
     NewBufferSize = smc_cbuf:size(NewBuffer),
     NewState = State#state{buffer=NewBuffer},
 
-    if
-        NewBufferSize == 0 andalso SubCount =< 0 ->
-            GEHandlers = gen_event:which_handlers(Channel),
-            GEHandlersCount = length(GEHandlers),
-
-            if GEHandlersCount /= SubCount ->
-                   lager:warning("subcount mismatch ~p != ~p", [SubCount, GEHandlersCount]),
-                   % since they don't match trust the gen_event handlers count
-                   FixedState = NewState#state{sub_count=GEHandlersCount},
-
-                   {noreply, FixedState, State#state.check_interval_ms};
-               true ->
-                   lager:debug("channel buffer empty and no subscribers, stopping channel"),
-                   smc_channel:send(Channel, {smc, {closing,
-                                                    [{buffer, NewBufferSize},
-                                                     {subs, SubCount}]}}),
-
-                   {stop, normal, NewState}
-            end;
-
+    IsEmptyAndNoListeners = NewBufferSize == 0 andalso SubCount =< 0,
+    if IsEmptyAndNoListeners ->
+           check_and_maybe_stop(NewState, NewBufferSize);
         true ->
-            lager:debug("reduced channel buffer because of inactivity to ~p items",
-                      [NewBufferSize]),
-            smc_channel:send(Channel, {smc, {heartbeat,
-                                             [{buffer, NewBufferSize},
-                                              {subs, SubCount}]}}),
-            {noreply, NewState, State#state.check_interval_ms}
+           send_heartbeat(NewState, NewBufferSize)
     end;
 
 handle_info({gen_event_EXIT, Handler, Reason}, State=#state{channel=Channel}) ->
@@ -137,6 +121,33 @@ code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
 % private api
+
+send_heartbeat(State=#state{sub_count=SubCount, channel=Channel}, NewBufferSize) ->
+    lager:debug("reduced channel buffer because of inactivity to ~p items",
+                [NewBufferSize]),
+    smc_channel:send(Channel, {smc, {heartbeat,
+                                     [{buffer, NewBufferSize},
+                                      {subs, SubCount}]}}),
+    {noreply, State, State#state.check_interval_ms}.
+
+check_and_maybe_stop(State=#state{sub_count=SubCount, channel=Channel}, NewBufferSize) ->
+    GEHandlers = gen_event:which_handlers(Channel),
+    GEHandlersCount = length(GEHandlers),
+
+    if GEHandlersCount /= SubCount ->
+           lager:warning("subcount mismatch ~p != ~p", [SubCount, GEHandlersCount]),
+           % since they don't match trust the gen_event handlers count
+           FixedState = State#state{sub_count=GEHandlersCount},
+
+           {noreply, FixedState, State#state.check_interval_ms};
+       true ->
+           lager:debug("channel buffer empty and no subscribers, stopping channel"),
+           smc_channel:send(Channel, {smc, {closing,
+                                            [{buffer, NewBufferSize},
+                                             {subs, SubCount}]}}),
+
+           {stop, normal, State}
+    end.
 
 do_replay(Pid, FromSeqNum, Buffer, GetSeqNum) ->
     GtFromSeqNum = fun (Entry) ->
