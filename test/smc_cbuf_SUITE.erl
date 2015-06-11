@@ -1,7 +1,7 @@
 -module(smc_cbuf_SUITE).
 -compile(export_all).
 
-all() -> [add_10_read_10, test_max_size, test_max_size_steps].
+all() -> [add_10_read_10, test_max_size, test_max_size_steps, test_max_size_edge_cases].
 
 new_cbuf(_Test) ->
     smc_cbuf:new([]).
@@ -56,3 +56,7 @@ test_max_size_steps(_Config) ->
     check_max_size(12, 8, [8, 7, 6, 5], 12, 4),
     check_max_size(12, 9, [9, 8, 7], 9, 3),
     check_max_size(12, 10, [10, 9, 8, 7], 12, 4).
+
+test_max_size_edge_cases(_Config) ->
+    check_max_size(6, 2, [2, 1], 6, 2),
+    check_max_size(3, 2, [2], 3, 1).

@@ -23,7 +23,7 @@
 
 new(Opts) ->
     MinCount = proplists:get_value(min_count, Opts, 50),
-    MaxCount = proplists:get_value(min_count, Opts, 100),
+    MaxCount = proplists:get_value(max_count, Opts, 100),
     MaxSizeBytes= proplists:get_value(max_size_bytes, Opts, 1048576),
     SizePercentCut = proplists:get_value(size_percent_cut, Opts, 0.5),
     #state{min_count=MinCount, max_count=MaxCount, max_size=MaxSizeBytes,

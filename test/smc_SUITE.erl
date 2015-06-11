@@ -5,9 +5,9 @@ all() ->
     [chann_send_receive, chann_send_receive_unsub_send,
      hchann_send_receive, hchann_send_receive_unsub_send,
      chann_stop_send, replay_empty_channel, replay_after_last_channel,
-     replay_after_some_channel, send_check_size,
+     replay_after_some_channel, send_check_size
 
-     triq_props].
+     ,triq_props].
 
 get_seqnum({SeqNum, _Data}) -> SeqNum.
 
