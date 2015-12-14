@@ -5,7 +5,7 @@ all() ->
     [chann_send_receive, chann_send_receive_unsub_send,
      hchann_send_receive, hchann_send_receive_unsub_send,
      chann_stop_send, replay_empty_channel, replay_after_last_channel,
-     replay_after_some_channel, send_check_size
+     replay_after_some_channel, send_check_size, status
 
      ,triq_props].
 
@@ -120,5 +120,27 @@ send_check_size(Config) ->
     Size = S1 + S2 + S3,
     Size = smc_hist_channel:size_bytes(RawChann).
 
+status(Config) ->
+    Chann = hchann(Config),
+    M1 = {42, "hi"},
+    S1 = erlang:external_size(M1),
+    M2 = {43, "hi 1"},
+    S2 = erlang:external_size(M2),
+    M3 = {44, "hi 2"},
+    S3 = erlang:external_size(M3),
+
+    smc:send(Chann, M1),
+    smc:send(Chann, M2),
+    smc:send(Chann, M3),
+
+    {_, RawChann} = Chann,
+    Size = S1 + S2 + S3,
+    {ok, Status} = smc_hist_channel:status(RawChann),
+    Size = proplists:get_value(buf_size_bytes, Status),
+    3 = proplists:get_value(buf_size, Status),
+    0 = proplists:get_value(sub_count, Status),
+    "status" = proplists:get_value(name, Status).
+
 triq_props(_Config) ->
     true = triq:check(smc_triq:smc_statem()).
+

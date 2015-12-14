@@ -2,7 +2,7 @@
 -behaviour(gen_server).
 
 -export([start_link/1, subscribe/2, subscribe/3, unsubscribe/2, send/2,
-         replay/3, size_bytes/1, stop/1]).
+         replay/3, size_bytes/1, stop/1, status/1]).
 
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2,
          code_change/3]).
@@ -23,6 +23,9 @@ size_bytes(Channel) ->
 
 subscribe(Channel, Pid) ->
     subscribe(Channel, Pid, nil).
+
+status(Channel) ->
+    gen_server:call(Channel, status).
 
 % will replay including FromSeqNum (that is >= FromSeqNum)
 subscribe(Channel, Pid, FromSeqNum) ->
@@ -80,6 +83,15 @@ handle_call({replay, Pid, FromSeqNum}, _From,
 handle_call(size_bytes, _From, State=#state{buffer=Buffer}) ->
     SizeBytes = smc_cbuf:size_bytes(Buffer),
     {reply, SizeBytes, State, State#state.check_interval_ms};
+
+handle_call(status, _From, State=#state{buffer=Buffer, sub_count=SubCount, name=Name}) ->
+    SizeBytes = smc_cbuf:size_bytes(Buffer),
+    Size = smc_cbuf:size(Buffer),
+    Result = {ok, [{buf_size_bytes, SizeBytes},
+                   {buf_size, Size},
+                   {sub_count, SubCount},
+                   {name, Name}]},
+    {reply, Result, State, State#state.check_interval_ms};
 
 handle_call(stop, _From, State) ->
     {stop, normal, stopped, State}.
