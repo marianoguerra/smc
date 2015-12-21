@@ -32,9 +32,13 @@ handle_event(Msg, State=#state{pid=Pid}) ->
     Pid ! Msg,
     {ok, State}.
 
-handle_call(_, State) -> {ok, ok, State}.
+handle_call(Reason, State) ->
+    lager:warning("smc_channel: Unknown handle_call: ~p", [Reason]),
+    {ok, ok, State}.
 
-handle_info(_, State) -> {ok, State}.
+handle_info(Reason, State) ->
+    lager:warning("smc_channel: Unknown handle_info: ~p", [Reason]),
+    {ok, State}.
 
 code_change(_OldVsn, State, _Extra) -> {ok, State}.
 
