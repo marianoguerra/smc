@@ -127,6 +127,7 @@ handle_info(Msg, State) ->
 
 terminate(Reason, #state{channel=Channel}) ->
     smc_channel:send(Channel, {smc, {terminate, [{reason, Reason}]}}),
+    smc_channel:stop(Channel),
     ok.
 
 code_change(_OldVsn, State, _Extra) ->
