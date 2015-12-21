@@ -42,6 +42,7 @@ handle_info(Reason, State) ->
 
 code_change(_OldVsn, State, _Extra) -> {ok, State}.
 
-terminate(Reason, _State) ->
+terminate(Reason, #state{pid=Pid}) ->
+    Pid ! {smc, {terminate, [{reason, Reason}]}},
     lager:debug("terminating channel ~p", [Reason]),
     ok.
