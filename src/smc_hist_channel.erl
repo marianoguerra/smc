@@ -1,4 +1,5 @@
 -module(smc_hist_channel).
+-include_lib("kernel/include/logger.hrl").
 -behaviour(gen_server).
 
 -export([start_link/1, subscribe/2, subscribe/3, unsubscribe/2, send/2,
@@ -97,7 +98,7 @@ handle_call(stop, _From, State) ->
     {stop, normal, stopped, State}.
 
 handle_cast(Msg, State) ->
-    lager:warning("Unexpected handle cast message: ~p~n", [Msg]),
+    ?LOG_WARNING("Unexpected handle cast message: ~p~n", [Msg]),
     {noreply, State}.
 
 handle_info(timeout, State=#state{buffer=Buffer, sub_count=SubCount}) ->
@@ -113,7 +114,7 @@ handle_info(timeout, State=#state{buffer=Buffer, sub_count=SubCount}) ->
     end;
 
 handle_info({gen_event_EXIT, Handler, Reason}, State=#state{channel=Channel}) ->
-    lager:debug("handler removed due to exit ~p ~p", [Handler, Reason]),
+    ?LOG_DEBUG("handler removed due to exit ~p ~p", [Handler, Reason]),
     % since we don't know for sure if this process unsubscribed itself we
     % ask gen_event how many subscribers we have
     NewSubCount = length(gen_event:which_handlers(Channel)),
@@ -122,7 +123,7 @@ handle_info({gen_event_EXIT, Handler, Reason}, State=#state{channel=Channel}) ->
     {noreply, NewState};
 
 handle_info(Msg, State) ->
-    lager:warning("Unexpected handle info message: ~p~n", [Msg]),
+    ?LOG_WARNING("Unexpected handle info message: ~p~n", [Msg]),
     {noreply, State}.
 
 terminate(Reason, #state{channel=Channel}) ->
@@ -136,7 +137,7 @@ code_change(_OldVsn, State, _Extra) ->
 % private api
 
 send_heartbeat(State=#state{sub_count=SubCount, channel=Channel}, NewBufferSize) ->
-    lager:debug("reduced channel buffer because of inactivity to ~p items",
+    ?LOG_DEBUG("reduced channel buffer because of inactivity to ~p items",
                 [NewBufferSize]),
     smc_channel:send(Channel, {smc, {heartbeat,
                                      [{buffer, NewBufferSize},
@@ -148,13 +149,13 @@ check_and_maybe_stop(State=#state{sub_count=SubCount, channel=Channel}, NewBuffe
     GEHandlersCount = length(GEHandlers),
 
     if GEHandlersCount /= SubCount ->
-           lager:warning("subcount mismatch ~p != ~p", [SubCount, GEHandlersCount]),
+           ?LOG_WARNING("subcount mismatch ~p != ~p", [SubCount, GEHandlersCount]),
            % since they don't match trust the gen_event handlers count
            FixedState = State#state{sub_count=GEHandlersCount},
 
            {noreply, FixedState, State#state.check_interval_ms};
        true ->
-           lager:debug("channel buffer empty and no subscribers, stopping channel"),
+           ?LOG_DEBUG("channel buffer empty and no subscribers, stopping channel"),
            smc_channel:send(Channel, {smc, {closing,
                                             [{buffer, NewBufferSize},
                                              {subs, SubCount}]}}),

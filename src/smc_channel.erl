@@ -1,4 +1,5 @@
 -module(smc_channel).
+-include_lib("kernel/include/logger.hrl").
 -behaviour(gen_event).
 
 -export([start_link/0, subscribe/2, unsubscribe/2, send/2, stop/1]).
@@ -33,16 +34,16 @@ handle_event(Msg, State=#state{pid=Pid}) ->
     {ok, State}.
 
 handle_call(Reason, State) ->
-    lager:warning("smc_channel: Unknown handle_call: ~p", [Reason]),
+    ?LOG_WARNING("smc_channel: Unknown handle_call: ~p", [Reason]),
     {ok, ok, State}.
 
 handle_info(Reason, State) ->
-    lager:warning("smc_channel: Unknown handle_info: ~p", [Reason]),
+    ?LOG_WARNING("smc_channel: Unknown handle_info: ~p", [Reason]),
     {ok, State}.
 
 code_change(_OldVsn, State, _Extra) -> {ok, State}.
 
 terminate(Reason, #state{pid=Pid}) ->
     Pid ! {smc, {terminate, [{reason, Reason}]}},
-    lager:debug("terminating channel ~p", [Reason]),
+    ?LOG_DEBUG("terminating channel ~p", [Reason]),
     ok.
